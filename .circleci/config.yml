@@ -96,7 +96,7 @@ jobs:
       - run:
           name: Deploy to Google Cloud
           command: |
-            kubectl set image deployment/timeoff-mngmnt-app timeoff-mngmnt-app=eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:${CIRCLE_SHA1} --record=true
+            kubectl set image deployment/timeoff-mngmnt-app timeoff-mngmnt-app=eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:${CIRCLE_SHA1} -n timeoff-mngmnt --record=true
 
 workflows:
   version: 2
