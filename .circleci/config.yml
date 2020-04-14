@@ -61,9 +61,8 @@ jobs:
             gcloud --quiet container clusters get-credentials ${GOOGLE_CLUSTER_NAME}
       - run:
           name: Build image
-          command: |
-            tar -xzvf ../workspace/dist.tar.gz
-            docker build -t eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:${CIRCLE_SHA1} -f Dockerfile.prod .
+          command: |            
+            docker build -t eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:${CIRCLE_SHA1} -f Dockerfile .
             docker tag eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:$CIRCLE_SHA1 eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:latest
       - run:
           name: Push image
