@@ -98,3 +98,31 @@ jobs:
           name: Deploy to Google Cloud
           command: |
             kubectl set image deployment/timeoff-mngmnt-app imeoff-mngmnt-app=eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:${CIRCLE_SHA1} --record=true
+
+workflows:
+  version: 2
+
+  deploy_workflow:
+    jobs:
+      - configure_env:
+          name: GCP Configuration
+
+      # Automatic publish image
+      - publish_image:
+          name: Publish image (auto)
+          requires:         
+            - GCP Configuration
+          filters:
+            branches:
+              only:
+                - master
+
+      # Automatic deploy 
+      - deploy:
+          name: Deploy
+          requires:
+            - Publish image (auto)
+          filters:
+            branches:
+              only:
+                - master
