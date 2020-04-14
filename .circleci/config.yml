@@ -1,0 +1,100 @@
+version: 2.1
+jobs:
+  configure_env:
+    docker:
+      - image: hashicorp/terraform:0.11.14
+        environment:
+          TF_ADMIN: quelleenergie-terraform-admin
+    steps:
+      - checkout
+      - run:
+          name: Authenticate on terraform with service account
+          command: |
+            echo ${terraform_read_account_json} | base64 -d > ${HOME}/gcp-key.json
+      - run:
+          name: Collect GCP environnement variable with terraform
+          command: |
+            export TF_CREDS=${HOME}/gcp-key.json
+            export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
+            mkdir -p gcp-env-vars
+            cd ./devops
+            terraform init
+            terraform workspace new shared-services
+            terraform apply -auto-approve
+            echo "export GOOGLE_PROJECT_ID=`terraform output project_id`" >>../gcp-env-vars/env_vars
+            echo "export GOOGLE_CLUSTER_NAME=`terraform output cluster_name`" >>../gcp-env-vars/env_vars
+            echo "export GOOGLE_COMPUTE_ZONE=`terraform output compute_zone`" >>../gcp-env-vars/env_vars
+            echo "export GOOGLE_ENV=`terraform output env`" >>../gcp-env-vars/env_vars
+            terraform output private_key  | base64 -d  >> ../gcp-env-vars/gcp-key.json
+      - persist_to_workspace:
+          root: gcp-env-vars
+          paths:
+            - env_vars
+            - gcp-key.json
+
+  publish_image:
+    docker:
+      - image: google/cloud-sdk:254.0.0
+        environment:
+          CONTAINER_NAME: timeoff-mngmnt
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ../workspace
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Authenticate on Google Cloud with service account
+          command: |
+            mv ../workspace/gcp-key.json ${HOME}/gcp-key.json
+            gcloud auth activate-service-account --key-file ${HOME}/gcp-key.json
+      - run:
+          name: Set environment variable
+          command: |
+            cat ../workspace/env_vars >> $BASH_ENV
+      - run:
+          name: Configure Google Cloud
+          command: |
+            gcloud --quiet config set project ${GOOGLE_PROJECT_ID}
+            gcloud --quiet config set compute/zone ${GOOGLE_COMPUTE_ZONE}
+            gcloud --quiet container clusters get-credentials ${GOOGLE_CLUSTER_NAME}
+      - run:
+          name: Build image
+          command: |
+            tar -xzvf ../workspace/dist.tar.gz
+            docker build -t eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:${CIRCLE_SHA1} -f Dockerfile.prod .
+            docker tag eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:$CIRCLE_SHA1 eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:latest
+      - run:
+          name: Push image
+          command: gcloud docker -- push eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}
+
+  deploy:
+    docker:
+      - image: google/cloud-sdk:254.0.0
+        environment:
+          CONTAINER_NAME: timeoff-mngmnt
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ../workspace
+      - run:
+          name: Authenticate on Google Cloud with service account
+          command: |
+            mv ../workspace/gcp-key.json ${HOME}/gcp-key.json
+            gcloud auth activate-service-account --key-file ${HOME}/gcp-key.json
+      - run:
+          name: Set environment variable
+          command: |
+            cat ../workspace/env_vars >> $BASH_ENV
+      - run:
+          name: Configure Google Cloud
+          command: |
+            gcloud --quiet config set project ${GOOGLE_PROJECT_ID}
+            gcloud --quiet config set compute/zone ${GOOGLE_COMPUTE_ZONE}
+            gcloud --quiet container clusters get-credentials ${GOOGLE_CLUSTER_NAME}
+      - run:
+          name: Deploy to Google Cloud
+          command: |
+            kubectl set image deployment/timeoff-mngmnt-app imeoff-mngmnt-app=eu.gcr.io/${GOOGLE_PROJECT_ID}/${CONTAINER_NAME}:${CIRCLE_SHA1} --record=true
