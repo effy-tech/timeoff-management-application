@@ -6,6 +6,5 @@
 node_modules/
 *.sqlite
 
-devops/.terraform/
-
-devops/terraform.tfstate.d/shared-services/terraform.tfstate
+.terraform
+terraform.tfstate*

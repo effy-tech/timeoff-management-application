@@ -1,7 +1,3 @@
 variable "bucket_name" {
-    default = "quelleenergie-terraform-admin"
-}
-
-variable "prefix" {
-    default = "shared-services"
+  default = "terraform-common-shared-services-state"
 }
